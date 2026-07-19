@@ -12,11 +12,14 @@ export ENGRAM_SERVER="${ENGRAM_SERVER:?falta ENGRAM_SERVER}" ENGRAM_TOKEN="${ENG
 export ENGRAM_CLOUD_SERVER="$ENGRAM_SERVER" ENGRAM_CLOUD_TOKEN="$ENGRAM_TOKEN"
 
 regen () {
-  mkdir -p /data /vault
+  # slate limpio: cada grafo solo contiene SUS proyectos (evita acumular datos de corridas previas)
+  rm -rf /data /vault; mkdir -p /data /vault
   echo "[1/3] pull ($ENGRAM_SERVER)"
   for p in $ENGRAM_PROJECTS; do
     engram cloud enroll "$p" >/dev/null 2>&1
-    engram sync --cloud --import --project "$p" >/dev/null 2>&1 && echo "  ok $p" || echo "  parcial/skip $p"
+    # varios pases: el import dependency-safe puede avanzar con datos legacy (relaciones huérfanas)
+    for _ in 1 2 3; do engram sync --cloud --import --project "$p" >/dev/null 2>&1; done
+    echo "  done $p"
   done
   echo "[2/3] obsidian-export"
   engram obsidian-export --vault /vault --graph-config force >/dev/null 2>&1 || true
