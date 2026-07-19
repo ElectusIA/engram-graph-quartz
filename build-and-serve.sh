@@ -9,12 +9,16 @@ export ENGRAM_CLOUD_AUTOSYNC=0
 mkdir -p /data /vault
 
 pull () { # $1=server $2=token ; resto=proyectos
+  # IMPORTANTE: usar SOLO env vars (ENGRAM_CLOUD_SERVER). `engram cloud config` escribe un
+  # cloud.json con token vacío que el path de import prioriza -> 401. (gotcha real, #49)
   local server="$1" token="$2"; shift 2
-  ENGRAM_CLOUD_TOKEN="$token" engram cloud config --server "$server" >/dev/null 2>&1
+  export ENGRAM_CLOUD_SERVER="$server" ENGRAM_CLOUD_TOKEN="$token"
   for p in "$@"; do
-    ENGRAM_CLOUD_TOKEN="$token" engram cloud enroll "$p" >/dev/null 2>&1
-    ENGRAM_CLOUD_TOKEN="$token" engram sync --cloud --import --project "$p" >/dev/null 2>&1 \
-      && echo "  ok $p" || echo "  WARN $p (sin datos o error)"
+    engram cloud enroll "$p" >/dev/null 2>&1
+    # import dependency-safe puede quedar parcial en datos legacy con relaciones huérfanas;
+    # trae la mayoría de observaciones, suficiente para el grafo.
+    engram sync --cloud --import --project "$p" >/dev/null 2>&1 \
+      && echo "  ok $p" || echo "  parcial/skip $p"
   done
 }
 
