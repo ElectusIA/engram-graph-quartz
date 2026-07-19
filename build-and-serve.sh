@@ -22,6 +22,7 @@ pull () { # $1=server $2=token ; resto=proyectos
   done
 }
 
+regen () { # pipeline completo: pull -> export -> quartz build
 echo "[1/4] pull DEV ($ENGRAM_DEV_SERVER)"
 pull "$ENGRAM_DEV_SERVER" "$ENGRAM_DEV_TOKEN" electus-platform electus electus-core electus-core-api electus-wpp electus-voice
 
@@ -32,7 +33,6 @@ pull "$ENGRAM_MULTI_SERVER" "$ENGRAM_MULTI_TOKEN" \
 
 echo "[3/4] obsidian-export -> markdown"
 engram obsidian-export --vault /vault --graph-config force >/dev/null 2>&1 || true
-STAMP="$(engram stats 2>/dev/null | tr -d '\r' | head -1)"
 
 echo "[4/4] quartz build"
 rm -rf /quartz/content
@@ -45,6 +45,14 @@ Grafo navegable de la memoria persistente (engram) del ecosistema Electus: desar
 Espejo de solo lectura, regenerado desde los servers engram-cloud. Usa el grafo (esquina) y la búsqueda.
 EOF
 cd /quartz && npx quartz build --output /site 2>&1 | tail -5
+}
 
-echo "== sirviendo /site =="
-exec nginx -g 'daemon off;'
+# --- primer build, luego servir y auto-regenerar cada 12h ---
+regen
+echo "== sirviendo /site (nginx) =="
+nginx -g 'daemon off;' &
+while true; do
+  sleep 43200
+  echo "== auto-regen ($(date -u)) =="
+  regen && nginx -s reload || echo "regen fallo, se conserva el sitio anterior"
+done
